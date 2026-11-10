@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { generateScript, planScenes, generateSceneImage, generateSceneVoice, type Scene } from '@/lib/ai-pipeline'
+import { renderProjectVideo } from '@/lib/video-render'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -73,12 +74,15 @@ export async function POST(req: NextRequest) {
         const missing = finalScenes.filter((scene) => !scene.imageUrl || !scene.audioUrl)
         if (missing.length) throw new Error(`Generation incomplete: ${missing.length} scene(s) are missing image or audio assets.`)
 
+        send('node_start', { node: 'assemble', label: 'MP4 Renderer' })
+        await db.project.update({ where: { id: projectId }, data: { currentNode: 'assemble', scenesJson: JSON.stringify(finalScenes), progress: 96 } })
+        const videoUrl = await renderProjectVideo(projectId, finalScenes)
         await db.project.update({
           where: { id: projectId },
           data: { scenesJson: JSON.stringify(finalScenes), progress: 100, status: 'completed', currentNode: null }
         })
-        send('node_done', { node: 'assemble', label: 'Media Ready', progress: 100 })
-        send('complete', { projectId, scenes: finalScenes, note: 'Scene media generated. MP4 rendering is not included in this pipeline yet.' })
+        send('node_done', { node: 'assemble', label: 'MP4 Renderer', progress: 100 })
+        send('complete', { projectId, scenes: finalScenes, videoUrl })
       } catch (e: any) {
         console.error('Generation pipeline error:', e)
         if (projectId) {
