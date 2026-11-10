@@ -1,6 +1,7 @@
-import ZAI from 'z-ai-web-dev-sdk'
 import fs from 'fs'
 import path from 'path'
+import { z } from 'zod'
+import { callN8n } from './n8n-client'
 import { VOICE_OPTIONS, STYLE_OPTIONS, DURATION_OPTIONS } from './options'
 
 export { VOICE_OPTIONS, STYLE_OPTIONS, DURATION_OPTIONS }
@@ -27,136 +28,51 @@ export interface Scene {
   duration?: number
 }
 
-// Step 1: Generate video script from topic
-export async function generateScript(topic: string, style: string, duration: string) {
-  const zai = await ZAI.create()
-  const completion = await zai.chat.completions.create({
-    messages: [
-      {
-        role: 'assistant',
-        content: `You are a professional video scriptwriter. Write engaging, well-structured video narration scripts.`
-      },
-      {
-        role: 'user',
-        content: `Write a video script for the topic: "${topic}".
-Style: ${style}
-Target duration: ${duration}
+const scriptResponse = z.object({ script: z.string().min(1) })
+const scenesResponse = z.object({
+  scenes: z.array(z.object({
+    title: z.string(),
+    narration: z.string(),
+    imagePrompt: z.string(),
+  })).min(1).max(12),
+})
 
-Requirements:
-- Write a compelling narration script ready to be spoken aloud
-- 150-280 words total
-- Engaging hook in the first sentence
-- Clear structure: intro, body, conclusion
-- Conversational, natural spoken tone
-- No stage directions, no headers, just the spoken narration text
-- End with a memorable closing line
-
-Return ONLY the script text, nothing else.`
-      }
-    ],
-    thinking: { type: 'disabled' }
-  })
-  return (completion.choices[0]?.message?.content || '').trim()
-}
-
-// Step 2: Break script into scenes with image prompts
-export async function planScenes(script: string, style: string): Promise<Scene[]> {
-  const zai = await ZAI.create()
-  const completion = await zai.chat.completions.create({
-    messages: [
-      {
-        role: 'assistant',
-        content: `You are a video director who breaks narration scripts into visual scenes with detailed image prompts.`
-      },
-      {
-        role: 'user',
-        content: `Break the following video narration into 4 to 6 scenes. For each scene output a JSON object.
-
-SCRIPT:
-"""
-${script}
-"""
-
-Visual style: ${style}
-
-Return a JSON array, each item with fields:
-- title: short scene title (max 6 words)
-- narration: the portion of the script spoken during this scene (1-3 sentences, copy verbatim from the script)
-- imagePrompt: a detailed visual prompt for image generation describing what should appear on screen. Include style, mood, composition, lighting. Style: ${style}. No text overlays.
-
-Output ONLY the JSON array, no markdown, no explanation.`
-      }
-    ],
-    thinking: { type: 'disabled' }
-  })
-  const raw = (completion.choices[0]?.message?.content || '').trim()
-  // Extract JSON from response (in case model added markdown)
-  const jsonMatch = raw.match(/\[[\s\S]*\]/)
-  if (!jsonMatch) throw new Error('Failed to parse scenes JSON')
-  const scenes = JSON.parse(jsonMatch[0]) as Scene[]
-  return scenes.map((s, i) => ({ ...s, index: i }))
-}
-
-// Step 3: Generate image for one scene
-export async function generateSceneImage(
-  projectId: string,
-  scene: Scene,
-  style: string
-): Promise<string> {
+async function saveRemoteAsset(projectId: string, filename: string, assetUrl: string) {
+  const parsed = new URL(assetUrl)
+  if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+    throw new Error('n8n asset URLs must use HTTPS outside localhost.')
+  }
+  const response = await fetch(parsed, { signal: AbortSignal.timeout(120_000), cache: 'no-store' })
+  if (!response.ok) throw new Error(`Unable to download generated asset (${response.status}).`)
+  const buffer = Buffer.from(await response.arrayBuffer())
+  if (buffer.length === 0 || buffer.length > 30 * 1024 * 1024) {
+    throw new Error('Generated asset is empty or larger than the 30 MB limit.')
+  }
   const dir = ensureProjectDir(projectId)
-  const zai = await ZAI.create()
-  const fullPrompt = `${scene.imagePrompt}. Visual style: ${style}, cinematic, high detail, professional photography`
-  const response = await zai.images.generations.create({
-    prompt: fullPrompt,
-    size: '1344x768'
-  })
-  const base64 = response.data[0].base64
-  const buffer = Buffer.from(base64, 'base64')
-  const filename = `scene-${scene.index}.png`
   fs.writeFileSync(path.join(dir, filename), buffer)
   return publicUrlFor(projectId, filename)
 }
 
-// Step 4: Generate voiceover for one scene (with retry for rate limits)
-export async function generateSceneVoice(
-  projectId: string,
-  scene: Scene,
-  voice: string
-): Promise<string> {
-  const dir = ensureProjectDir(projectId)
-  const zai = await ZAI.create()
-  const text = scene.narration.slice(0, 1000) // TTS limit
-  const filename = `scene-${scene.index}.wav`
-  const outPath = path.join(dir, filename)
+export async function generateScript(topic: string, style: string, duration: string) {
+  const result = scriptResponse.parse(await callN8n<unknown>({ action: 'script', topic, style, duration }))
+  return result.script.trim()
+}
 
-  // Retry up to 4 times with exponential backoff for 429/5xx
-  const maxRetries = 4
-  let lastError: any
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await zai.audio.tts.create({
-        input: text,
-        voice: voice,
-        speed: 1.0,
-        response_format: 'wav',
-        stream: false
-      })
-      const arrayBuffer = await response.arrayBuffer()
-      const buffer = Buffer.from(new Uint8Array(arrayBuffer))
-      fs.writeFileSync(outPath, buffer)
-      return publicUrlFor(projectId, filename)
-    } catch (e: any) {
-      lastError = e
-      const msg = e.message || ''
-      if (msg.includes('429') || msg.includes('Too many requests') || msg.includes('5') || msg.includes('不支持')) {
-        // Exponential backoff: 2s, 4s, 8s, 16s
-        const wait = Math.min(2000 * Math.pow(2, attempt), 20000)
-        console.warn(`TTS retry ${attempt + 1}/${maxRetries} for scene ${scene.index} after ${wait}ms`)
-        await new Promise((r) => setTimeout(r, wait))
-        continue
-      }
-      throw e
-    }
-  }
-  throw lastError
+export async function planScenes(script: string, style: string): Promise<Scene[]> {
+  const result = scenesResponse.parse(await callN8n<unknown>({ action: 'scenes', script, style }))
+  return result.scenes.map((scene, index) => ({ ...scene, index }))
+}
+
+export async function generateSceneImage(projectId: string, scene: Scene, style: string): Promise<string> {
+  const result = z.object({ imageUrl: z.string().url() }).parse(
+    await callN8n<unknown>({ action: 'image', projectId, scene, style })
+  )
+  return saveRemoteAsset(projectId, `scene-${scene.index}.png`, result.imageUrl)
+}
+
+export async function generateSceneVoice(projectId: string, scene: Scene, voice: string): Promise<string> {
+  const result = z.object({ audioUrl: z.string().url() }).parse(
+    await callN8n<unknown>({ action: 'voice', projectId, scene, voice })
+  )
+  return saveRemoteAsset(projectId, `scene-${scene.index}.wav`, result.audioUrl)
 }
