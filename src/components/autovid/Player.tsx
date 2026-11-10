@@ -182,19 +182,13 @@ export function Player() {
   }
 
   const handleDownload = () => {
-    const data = {
-      project: currentProject?.title,
-      topic: currentProject?.topic,
-      script: currentProject?.script,
-      scenes: validScenes
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
+    if (!currentProject || currentProject.status !== 'completed') return
     const a = document.createElement('a')
-    a.href = url
-    a.download = `${currentProject?.title || 'autovid'}-project.json`
+    a.href = `/generated/${currentProject.id}/final.mp4`
+    a.download = `${currentProject.title || 'autovid'}.mp4`
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    a.remove()
   }
 
   if (!currentProject || validScenes.length === 0) {
@@ -238,10 +232,11 @@ export function Player() {
             </div>
             <button
               onClick={handleDownload}
+              disabled={currentProject.status !== 'completed'}
               className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/[0.05]"
             >
               <Download className="h-3.5 w-3.5" />
-              Export
+              Download MP4
             </button>
           </div>
 
