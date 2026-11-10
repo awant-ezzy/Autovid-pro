@@ -8,6 +8,8 @@ This folder installs n8n separately from the Next.js application. The n8n databa
 - Docker Engine and Docker Compose plugin
 - A hostname routed to this server through Cloudflare Tunnel or a reverse proxy
 - At least 2 GB RAM available for n8n; more is recommended for concurrent executions
+- Install FFmpeg on the Autovid-Pro host for MP4 rendering: `sudo apt install -y ffmpeg` and verify with `ffmpeg -version`
+- If running Docker inside a Proxmox LXC, enable nesting and keyctl for that container; a small dedicated VM is the simpler isolation boundary
 
 ## Install
 
@@ -15,6 +17,10 @@ This folder installs n8n separately from the Next.js application. The n8n databa
 sudo apt update
 sudo apt install -y ca-certificates curl openssl
 # Install Docker using the official Docker Engine instructions for your Ubuntu/Debian release.
+sudo apt install -y docker.io docker-compose-v2
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"
+# Log out and back in after adding your user to the docker group.
 docker --version
 docker compose version
 ```
