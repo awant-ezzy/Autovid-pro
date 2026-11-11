@@ -46,7 +46,7 @@ docker compose exec ollama ollama run qwen2.5:3b "Tulis satu kalimat bahasa Indo
 Check Piper:
 
 ```bash
-curl -s http://127.0.0.1:5000/info
+docker compose exec n8n node -e "fetch('http://piper:5000/info').then(r=>r.text()).then(console.log)"
 ```
 
 Piper is intentionally not published to the host. To test it from inside the Compose network, use:
