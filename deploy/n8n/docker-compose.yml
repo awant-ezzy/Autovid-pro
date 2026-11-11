@@ -4,7 +4,6 @@ services:
     container_name: autovid-n8n
     restart: unless-stopped
     ports:
-      # Keep n8n private; expose it through Cloudflare Tunnel or a reverse proxy.
       - "127.0.0.1:${N8N_PORT:-5678}:5678"
     environment:
       TZ: ${GENERIC_TIMEZONE:-Asia/Jakarta}
@@ -23,8 +22,31 @@ services:
       N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-true}
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: "336"
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: "none"
     volumes:
       - n8n_data:/home/node/.n8n
+    depends_on:
+      - ollama
+      - piper
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: autovid-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    # Not published to the LAN; n8n accesses it on the internal Compose network.
+
+  piper:
+    build:
+      context: ./piper
+    container_name: autovid-piper
+    restart: unless-stopped
+    volumes:
+      - piper_voices:/voices
+    # Not published to the LAN; n8n accesses it on the internal Compose network.
 
 volumes:
   n8n_data:
+  ollama_data:
+  piper_voices:
