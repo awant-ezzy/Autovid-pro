@@ -43,13 +43,13 @@ async function saveRemoteAsset(projectId: string, filename: string, assetUrl: st
   let mimeType = ''
 
   if (assetUrl.startsWith('data:')) {
-    const match = assetUrl.match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\\s]+)$/)
+    const match = assetUrl.match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/)
     if (!match) throw new Error('n8n returned an invalid base64 data URL.')
     mimeType = match[1].toLowerCase()
     if (!['image/svg+xml', 'image/png', 'audio/wav', 'audio/x-wav'].includes(mimeType)) {
       throw new Error(`Unsupported generated asset type: ${mimeType}`)
     }
-    buffer = Buffer.from(match[2].replace(/\\s/g, ''), 'base64')
+    buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64')
   } else {
     const parsed = new URL(assetUrl)
     if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
