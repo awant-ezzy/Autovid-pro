@@ -1,0 +1,454 @@
+{
+  "name": "Autovid-Pro - Ollama Local AI",
+  "nodes": [
+    {
+      "id": "webhook-autovid",
+      "name": "Autovid Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "autovid-generate",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "switch-action",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "script",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "script"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "scenes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "scenes"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "voice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "voice"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ollama-script",
+      "name": "Ollama - Write Script",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: 'qwen2.5:3b', stream: false, format: 'json', keep_alive: '10m', messages: [ { role: 'system', content: 'Anda penulis naskah video pendek profesional berbahasa Indonesia. Kembalikan JSON valid saja dengan bentuk {\"script\":\"...\"}. Tanpa markdown. Buat narasi menarik, pembuka kuat, alur jelas, dan penutup. Sesuaikan panjang dengan durasi.' }, { role: 'user', content: 'Topik: ' + ($('Autovid Webhook').first().json.body.topic || '') + '\\nGaya: ' + ($('Autovid Webhook').first().json.body.style || 'cinematic') + '\\nDurasi: ' + ($('Autovid Webhook').first().json.body.duration || '30 detik') } ] } }}",
+        "options": {
+          "timeout": 180000
+        }
+      }
+    },
+    {
+      "id": "parse-script",
+      "name": "Validate Script JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.message?.content;\nif (typeof raw !== 'string') throw new Error('Ollama response is missing message.content');\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch { throw new Error('Ollama did not return valid JSON for script'); }\nif (typeof parsed.script !== 'string' || !parsed.script.trim()) throw new Error('Ollama script field is empty');\nreturn { json: { script: parsed.script.trim() } };"
+      }
+    },
+    {
+      "id": "respond-script",
+      "name": "Return Script",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { script: $json.script } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "ollama-scenes",
+      "name": "Ollama - Plan Scenes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: 'qwen2.5:3b', stream: false, format: 'json', keep_alive: '10m', messages: [ { role: 'system', content: 'Anda sutradara video pendek. Bagi naskah menjadi 4 sampai 8 scene berbahasa Indonesia. Kembalikan JSON valid saja dengan bentuk {\"scenes\":[{\"title\":\"...\",\"narration\":\"...\",\"imagePrompt\":\"...\"}]}. narration harus berupa potongan narasi yang akan dibacakan. imagePrompt harus mendeskripsikan gambar visual tanpa teks di dalam gambar. Jangan sertakan markdown.' }, { role: 'user', content: 'Gaya visual: ' + ($('Autovid Webhook').first().json.body.style || 'cinematic') + '\\nNaskah:\\n' + ($('Autovid Webhook').first().json.body.script || '') } ] } }}",
+        "options": {
+          "timeout": 180000
+        }
+      }
+    },
+    {
+      "id": "parse-scenes",
+      "name": "Validate Scenes JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        220
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.message?.content;\nif (typeof raw !== 'string') throw new Error('Ollama response is missing message.content');\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch { throw new Error('Ollama did not return valid JSON for scenes'); }\nif (!Array.isArray(parsed.scenes) || parsed.scenes.length < 1 || parsed.scenes.length > 12) throw new Error('Expected 1 to 12 scenes');\nconst scenes = parsed.scenes.map((s, i) => {\n  if (!s || typeof s.title !== 'string' || typeof s.narration !== 'string' || typeof s.imagePrompt !== 'string') throw new Error('Scene ' + (i + 1) + ' is missing title, narration, or imagePrompt');\n  return { title: s.title, narration: s.narration, imagePrompt: s.imagePrompt };\n});\nreturn { json: { scenes } };"
+      }
+    },
+    {
+      "id": "respond-scenes",
+      "name": "Return Scenes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        220
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { scenes: $json.scenes } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "build-svg",
+      "name": "Create Local Scene Artwork",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        460
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $('Autovid Webhook').first().json.body || {};\nconst scene = body.scene || {};\nconst xml = (v) => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');\nconst wrap = (value, limit) => {\n  const words = String(value || '').split(/\\s+/).filter(Boolean);\n  const lines = [];\n  let line = '';\n  for (const word of words) {\n    const next = line ? line + ' ' + word : word;\n    if (next.length > limit && line) { lines.push(line); line = word; }\n    else line = next;\n  }\n  if (line) lines.push(line);\n  return lines;\n};\nconst titleLines = wrap(scene.title || 'Autovid', 20).slice(0, 3);\nconst promptLines = wrap(scene.imagePrompt || body.style || 'Cinematic visual', 38).slice(0, 5);\nconst narrationLines = wrap(scene.narration || '', 44).slice(0, 4);\nconst titleSvg = titleLines.map((line, i) => '<tspan x=\"110\" dy=\"' + (i ? 92 : 0) + '\">' + xml(line) + '</tspan>').join('');\nconst promptSvg = promptLines.map((line, i) => '<tspan x=\"110\" dy=\"' + (i ? 52 : 0) + '\">' + xml(line) + '</tspan>').join('');\nconst narrationSvg = narrationLines.map((line, i) => '<tspan x=\"110\" dy=\"' + (i ? 44 : 0) + '\">' + xml(line) + '</tspan>').join('');\nconst svg = '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1080\" height=\"1920\" viewBox=\"0 0 1080 1920\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#101827\"/><stop offset=\"0.55\" stop-color=\"#243b55\"/><stop offset=\"1\" stop-color=\"#141e30\"/></linearGradient><radialGradient id=\"r\"><stop offset=\"0\" stop-color=\"#38bdf8\" stop-opacity=\".55\"/><stop offset=\"1\" stop-color=\"#38bdf8\" stop-opacity=\"0\"/></radialGradient></defs><rect width=\"1080\" height=\"1920\" fill=\"url(#g)\"/><circle cx=\"820\" cy=\"460\" r=\"560\" fill=\"url(#r)\"/><circle cx=\"120\" cy=\"1450\" r=\"460\" fill=\"url(#r)\" opacity=\".65\"/><path d=\"M0 1180 Q540 900 1080 1180 V1920 H0Z\" fill=\"#07111f\" opacity=\".45\"/><rect x=\"72\" y=\"120\" width=\"936\" height=\"1680\" rx=\"44\" fill=\"none\" stroke=\"#ffffff\" stroke-opacity=\".22\" stroke-width=\"3\"/><text x=\"110\" y=\"260\" fill=\"#7dd3fc\" font-family=\"Arial,sans-serif\" font-size=\"34\" letter-spacing=\"8\">AUTOVID • LOCAL AI</text><text x=\"110\" y=\"780\" fill=\"#ffffff\" font-family=\"Arial,sans-serif\" font-size=\"76\" font-weight=\"700\">' + titleSvg + '</text><text x=\"110\" y=\"1120\" fill=\"#dbeafe\" font-family=\"Arial,sans-serif\" font-size=\"38\">' + promptSvg + '</text><text x=\"110\" y=\"1510\" fill=\"#ffffff\" font-family=\"Arial,sans-serif\" font-size=\"32\" opacity=\".88\">' + narrationSvg + '</text></svg>';\nconst imageUrl = 'data:image/svg+xml;base64,' + Buffer.from(svg, 'utf8').toString('base64');\nreturn { json: { imageUrl } };"
+      }
+    },
+    {
+      "id": "respond-image",
+      "name": "Return Scene Artwork",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        460
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { imageUrl: $json.imageUrl } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "piper-tts",
+      "name": "Piper - Indonesian Voice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        700
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://piper:5000/synthesize",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { text: $('Autovid Webhook').first().json.body.scene.narration, length_scale: 1.0 } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 180000
+        }
+      }
+    },
+    {
+      "id": "encode-audio",
+      "name": "Encode WAV for Autovid",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        700
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const binary = $input.item.binary?.data;\nif (!binary?.data) throw new Error('Piper did not return a WAV binary file in property data');\nreturn { json: { audioUrl: 'data:audio/wav;base64,' + binary.data } };"
+      }
+    },
+    {
+      "id": "respond-audio",
+      "name": "Return WAV Audio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        700
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { audioUrl: $json.audioUrl } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Autovid Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Ollama - Write Script",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ollama - Plan Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Local Scene Artwork",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Piper - Indonesian Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama - Write Script": {
+      "main": [
+        [
+          {
+            "node": "Validate Script JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Script JSON": {
+      "main": [
+        [
+          {
+            "node": "Return Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama - Plan Scenes": {
+      "main": [
+        [
+          {
+            "node": "Validate Scenes JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Scenes JSON": {
+      "main": [
+        [
+          {
+            "node": "Return Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Local Scene Artwork": {
+      "main": [
+        [
+          {
+            "node": "Return Scene Artwork",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Piper - Indonesian Voice": {
+      "main": [
+        [
+          {
+            "node": "Encode WAV for Autovid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encode WAV for Autovid": {
+      "main": [
+        [
+          {
+            "node": "Return WAV Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none"
+  },
+  "versionId": "f35c0f2e-4a68-4d90-8c0d-6edc01aab001",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
