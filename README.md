@@ -5,7 +5,8 @@ Next.js application for AI-assisted scene-based video creation.
 ## Current deployment architecture
 
 - Next.js standalone server + Prisma/SQLite
-- n8n orchestrates script, scene, image, and voice generation
+- n8n orchestrates local Ollama script/scene generation and local Piper Indonesian voice generation
+- The included starter workflow creates SVG scene cards locally (not diffusion-generated artwork); ComfyUI can be integrated later for AI image generation
 - FFmpeg renders the generated scene images and voice tracks into a vertical 1080x1920 MP4
 - Generated assets are stored under `public/generated/<projectId>/`
 
@@ -17,7 +18,7 @@ Next.js application for AI-assisted scene-based video creation.
 3. Copy `.env.example` to `.env`, then set a persistent SQLite `DATABASE_URL`, `N8N_WEBHOOK_URL`, and `N8N_WEBHOOK_TOKEN`.
 4. Install dependencies with `npm install` (or Bun if you use the lockfile), then run `npm run db:generate`.
 5. Install n8n using the instructions in [deploy/n8n/README.md](deploy/n8n/README.md).
-6. Configure the n8n workflow according to [docs/N8N-INTEGRATION.md](docs/N8N-INTEGRATION.md).
+6. Import [the local Ollama workflow](deploy/n8n/workflows/autovid-ollama-local.json) and follow [docs/N8N-INTEGRATION.md](docs/N8N-INTEGRATION.md) to set Header Auth, pull the model, and test all actions.
 7. Run `npm run build` and `npm start`.
 
 Do not run `prisma db push --accept-data-loss` on a database containing important data. Back up the SQLite file before schema changes.
