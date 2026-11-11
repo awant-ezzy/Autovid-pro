@@ -16,7 +16,7 @@ Next.js application for AI-assisted scene-based video creation.
 2. Clone this repository and check out the deployment branch while it is being tested:
    `git checkout feature/n8n-ai-deployment`
 3. Copy `.env.example` to `.env`, then set a persistent SQLite `DATABASE_URL`, `N8N_WEBHOOK_URL`, and `N8N_WEBHOOK_TOKEN`.
-4. Install dependencies with `npm install` (or Bun if you use the lockfile), then run `npm run db:generate`.
+4. Install dependencies with `npm install`, then run `npm run db:generate`. For a brand-new empty test database only, run `npm run db:push` to create the SQLite tables. For an existing database, make a backup and review the Prisma schema diff before applying any schema change.
 5. Install n8n using the instructions in [deploy/n8n/README.md](deploy/n8n/README.md).
 6. Import [the local Ollama workflow](deploy/n8n/workflows/autovid-ollama-local.json) and follow [docs/N8N-INTEGRATION.md](docs/N8N-INTEGRATION.md) to set Header Auth, pull the model, and test all actions.
 7. Run `npm run build` and `npm start`.
