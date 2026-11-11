@@ -33,7 +33,9 @@ cp .env.example .env
 nano .env
 # Set the public HTTPS hostname and a unique encryption key:
 openssl rand -hex 32
+docker compose build piper
 docker compose up -d
+docker compose exec ollama ollama pull qwen2.5:3b
 docker compose logs -f n8n
 ```
 
@@ -61,6 +63,12 @@ docker compose logs --tail=100 n8n
 ``
 
 Never run `docker compose down -v` unless you intentionally want to delete n8n's persistent data.
+
+## Import the ready-made local AI workflow
+
+Import `workflows/autovid-ollama-local.json` in n8n. On its **Autovid Webhook** node, select Header Auth and create a credential with header name `X-Autovid-Token` and a strong value. Activate the workflow. It calls Ollama at `http://ollama:11434` and Indonesian Piper at `http://piper:5000` over the private Compose network. Full test commands are in [../../docs/N8N-INTEGRATION.md](../../docs/N8N-INTEGRATION.md).
+
+The starter workflow uses Ollama for text and scene planning, Piper for Indonesian speech, and SVG scene cards for images. SVG cards are not AI-generated artwork; add ComfyUI with a suitable diffusion model if actual generated images are required.
 
 ## Autovid integration contract
 
