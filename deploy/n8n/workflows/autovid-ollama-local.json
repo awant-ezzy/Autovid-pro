@@ -144,7 +144,8 @@
         "jsonBody": "={{ { model: 'qwen2.5:3b', stream: false, format: 'json', keep_alive: '10m', messages: [ { role: 'system', content: 'Anda penulis naskah video pendek profesional berbahasa Indonesia. Kembalikan JSON valid saja dengan bentuk {\"script\":\"...\"}. Tanpa markdown. Buat narasi menarik, pembuka kuat, alur jelas, dan penutup. Sesuaikan panjang dengan durasi.' }, { role: 'user', content: 'Topik: ' + ($('Autovid Webhook').first().json.body.topic || '') + '\\nGaya: ' + ($('Autovid Webhook').first().json.body.style || 'cinematic') + '\\nDurasi: ' + ($('Autovid Webhook').first().json.body.duration || '30 detik') } ] } }}",
         "options": {
           "timeout": 180000
-        }
+        },
+        "contentType": "json"
       }
     },
     {
@@ -195,7 +196,8 @@
         "jsonBody": "={{ { model: 'qwen2.5:3b', stream: false, format: 'json', keep_alive: '10m', messages: [ { role: 'system', content: 'Anda sutradara video pendek. Bagi naskah menjadi 4 sampai 8 scene berbahasa Indonesia. Kembalikan JSON valid saja dengan bentuk {\"scenes\":[{\"title\":\"...\",\"narration\":\"...\",\"imagePrompt\":\"...\"}]}. narration harus berupa potongan narasi yang akan dibacakan. imagePrompt harus mendeskripsikan gambar visual tanpa teks di dalam gambar. Jangan sertakan markdown.' }, { role: 'user', content: 'Gaya visual: ' + ($('Autovid Webhook').first().json.body.style || 'cinematic') + '\\nNaskah:\\n' + ($('Autovid Webhook').first().json.body.script || '') } ] } }}",
         "options": {
           "timeout": 180000
-        }
+        },
+        "contentType": "json"
       }
     },
     {
@@ -283,7 +285,8 @@
             }
           },
           "timeout": 180000
-        }
+        },
+        "contentType": "json"
       }
     },
     {
