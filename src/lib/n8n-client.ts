@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 export async function callN8n<T>(payload: { action: 'script' | 'scenes' | 'image' | 'voice'; [key: string]: unknown }): Promise<T> {
   const url = process.env.N8N_WEBHOOK_URL
   const token = process.env.N8N_WEBHOOK_TOKEN
